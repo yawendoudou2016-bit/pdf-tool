@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDF 处理工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+:root{--bg:#f0f2f6;--panel:#fff;--ink:#111827;--muted:#6b7280;--accent:#4f46e5;--green:#059669;--red:#dc2626;--border:#e5e7eb;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--ink);}
+.topbar{background:var(--ink);color:#fff;padding:0 28px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+.topbar h1{font-size:16px;font-weight:600;}
+.topbar .ver{font-size:11px;opacity:.4;margin-left:auto;}
+.layout{display:grid;grid-template-columns:320px 1fr;min-height:calc(100vh - 52px);}
+.sidebar{background:var(--panel);border-right:1px solid var(--border);padding:18px 16px;overflow-y:auto;height:calc(100vh - 52px);position:sticky;top:52px;}
+.card{background:#fafafa;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.badge{width:20px;height:20px;border-radius:50%;color:#fff;font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+.b-blue{background:var(--accent);} .b-orange{background:#f59e0b;} .b-green{background:var(--green);}
+.drop-zone{border:2px dashed var(--border);border-radius:8px;padding:16px 10px;text-align:center;cursor:pointer;transition:all .2s;background:#fff;position:relative;}
+.drop-zone:hover{border-color:var(--accent);background:#f5f3ff;}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-zone .dz-icon{font-size:24px;margin-bottom:4px;}
+.drop-zone p{font-size:11px;color:var(--muted);}
+.fname{font-size:11px;color:var(--green);font-weight:700;margin-top:3px;word-break:break-all;}
+.lbl{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:3px;margin-top:8px;}
+.lbl:first-child{margin-top:0;}
+input[type=number],input[type=text],select{width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:12px;font-family:inherit;outline:none;transition:border-color .15s;background:#fff;}
+input:focus,select:focus{border-color:var(--accent);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.sld-row{display:flex;align-items:center;gap:6px;}
+.sld-row input[type=range]{flex:1;accent-color:var(--accent);}
+.sld-val{font-size:11px;color:var(--accent);font-weight:700;width:30px;text-align:right;flex-shrink:0;}
+.btn{width:100%;padding:10px;border:none;border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-a{background:var(--accent);color:#fff;} .btn-a:not(:disabled):hover{opacity:.88;}
+.btn-g{background:var(--green);color:#fff;} .btn-g:not(:disabled):hover{opacity:.88;}
+.btn-o{background:transparent;border:1.5px solid var(--accent);color:var(--accent);} .btn-o:not(:disabled):hover{background:#f5f3ff;}
+.prog{margin-top:7px;display:none;}
+.prog-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s;width:0;}
+.prog-msg{font-size:10px;color:var(--muted);margin-top:4px;text-align:center;min-height:14px;}
+.hint{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:7px 9px;font-size:10px;color:#1d4ed8;line-height:1.5;margin-top:7px;}
+.hint.warn{background:#fff7ed;border-color:#fed7aa;color:#c2410c;}
+.main{padding:22px 26px;overflow-y:auto;}
+.main-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.main-hd h2{font-size:15px;font-weight:700;}
+.pg-info{font-size:12px;color:var(--muted);}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px;}
+.pg-card{background:var(--panel);border:2px solid var(--border);border-radius:8px;overflow:hidden;position:relative;}
+.pg-card canvas{width:100%;display:block;}
+.pg-label{padding:5px 10px;font-size:10px;font-weight:700;color:var(--muted);font-family:monospace;}
+.ov-top,.ov-bot{position:absolute;left:0;right:0;background:rgba(239,68,68,.32);pointer-events:none;}
+.ov-top{top:0;} .ov-bot{bottom:22px;}
+.empty{text-align:center;padding:70px 20px;color:var(--muted);}
+.empty .ei{font-size:56px;margin-bottom:12px;}
+.empty p{font-size:14px;color:var(--ink);margin-bottom:5px;}
+.toast{position:fixed;bottom:18px;right:18px;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;opacity:0;pointer-events:none;transition:opacity .25s;z-index:999;}
+.toast.ok{background:var(--green);} .toast.err{background:var(--red);} .toast.info{background:var(--accent);}
+.toast.show{opacity:1;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:200;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border-radius:12px;width:580px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.25);}
+.modal-hd{padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-hd h3{font-size:15px;font-weight:700;}
+.modal-x{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{flex:1;overflow-y:auto;padding:14px 18px;}
+.modal-ft{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+.pg-block{margin-bottom:16px;padding-bottom:16px;border-bottom:1px dashed var(--border);}
+.pg-block:last-child{border-bottom:none;}
+.pg-block-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
+.pg-text{font-size:13px;line-height:1.7;white-space:pre-wrap;}
+.mbtn{padding:9px 18px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.mbtn-g{background:none;border:1.5px solid var(--border);color:var(--muted);}
+.mbtn-b{background:var(--green);color:#fff;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span style="font-size:20px">📄</span>
+  <h1>PDF 处理工具 · 老师专用</h1>
+  <span class="ver">Gemini AI · 免费使用 · 无需安装</span>
+</div>
+
+<div id="corsWarn" style="display:none;background:#fef2f2;border-bottom:2px solid #fca5a5;padding:10px 24px;font-size:12px;color:#991b1b;display:flex;align-items:center;gap:10px;">
+  <span style="font-size:18px">⚠️</span>
+  <span>检测到你是从本地文件直接打开（file://），<b>浏览器会拦截所有 API 请求导致识别失败</b>。请改用以下方式打开：<br>
+  方法①（推荐）：用 VS Code 安装 Live Server 插件后右键点击文件选"Open with Live Server"<br>
+  方法②：在文件所在文件夹打开命令行，运行 <code style="background:#fee2e2;padding:1px 5px;border-radius:3px">python -m http.server 8080</code>，然后浏览器访问 <b>http://localhost:8080/PDF处理工具.html</b></span>
+</div>
+
+<script>
+// Show CORS warning if opened via file:// protocol
+if (location.protocol === 'file:') {
+  document.getElementById('corsWarn').style.display = 'flex';
+}
+</script>
+<div class="sidebar">
+
+  <!-- Step 1 -->
+  <div class="card">
+    <div class="card-title"><span class="badge b-blue">1</span> 导入 PDF 文件</div>
+    <div class="drop-zone" id="dz">
+      <input type="file" id="pdfInput" accept=".pdf" onchange="loadPDF(this.files[0])">
+      <div class="dz-icon">📂</div>
+      <p>点击选择 或 拖拽 PDF 到此处</p>
+      <div class="fname" id="pdfName">未选择文件</div>
+    </div>
+    <div class="prog" id="loadProg">
+      <div class="prog-bar"><div class="prog-fill" id="loadFill"></div></div>
+      <div class="prog-msg" id="loadMsg"></div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card">
+    <div class="card-title"><span class="badge b-orange">2</span> 删除原有页眉页脚</div>
+    <button class="btn btn-a" id="btnAutoDetect" onclick="autoDetectCrop()" disabled>
+      🤖 AI 自动识别页眉页脚
+    </button>
+    <div class="prog" id="detectProg">
+      <div class="prog-bar"><div class="prog-fill" id="detectFill"></div></div>
+      <div class="prog-msg" id="detectMsg"></div>
+    </div>
+    <div id="autoResult" style="display:none">
+      <div class="hint" id="autoResultTxt" style="margin-top:8px;margin-bottom:8px"></div>
+    </div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <span class="lbl" style="margin-top:0;color:#9ca3af">微调（AI识别后可拖动精调）</span>
+      <span class="lbl" style="margin-top:6px">页眉高度（占页高 %）</span>
+      <div class="sld-row">
+        <input type="range" id="sTop" min="0" max="30" value="0" oninput="updateCrop()">
+        <span class="sld-val" id="sTopV">0%</span>
+      </div>
+      <span class="lbl">页脚高度（占页高 %）</span>
+      <div class="sld-row">
+        <input type="range" id="sBot" min="0" max="30" value="0" oninput="updateCrop()">
+        <span class="sld-val" id="sBotV">0%</span>
+      </div>
+    </div>
+    <div class="hint">预览图中 <b style="color:#ef4444">红色区域</b> 即将被裁掉，实时可见</div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card">
+    <div class="card-title"><span class="badge b-orange">3</span> 添加新页眉 / 页脚</div>
+    <span class="lbl">新页眉：上传 Logo（PNG/JPG）</span>
+    <div class="drop-zone" style="padding:10px;" onclick="document.getElementById('logoInp').click()">
+      <input type="file" id="logoInp" accept=".png,.jpg,.jpeg" style="display:none" onchange="loadLogo(this)">
+      <p style="font-size:11px">点击上传 Logo 图片</p>
+      <div class="fname" id="logoName">未选择</div>
+    </div>
+    <img id="logoPrev" style="width:100%;height:42px;object-fit:contain;display:none;border:1px solid var(--border);border-radius:6px;margin-top:6px;background:#fafafa;">
+    <div class="row2" style="margin-top:8px">
+      <div>
+        <span class="lbl">Logo 位置</span>
+        <select id="logoAlign">
+          <option value="left">左对齐</option>
+          <option value="center" selected>居中</option>
+          <option value="right">右对齐</option>
+        </select>
+      </div>
+      <div>
+        <span class="lbl">Logo 高度(px)</span>
+        <input type="number" id="logoH" value="60" min="20" max="200">
+      </div>
+    </div>
+    <span class="lbl" style="margin-top:10px">新页脚文字（留空不加）</span>
+    <input type="text" id="footTxt" placeholder="© 2024 某某公司  |  内部资料">
+    <div class="row2">
+      <div>
+        <span class="lbl">字号</span>
+        <input type="number" id="footSz" value="11" min="8" max="18">
+      </div>
+      <div>
+        <span class="lbl">颜色</span>
+        <input type="color" id="footColor" value="#555555" style="height:34px;padding:2px 4px;border-radius:6px;cursor:pointer;">
+      </div>
+    </div>
+    <button class="btn btn-a" id="btnPDF" onclick="exportPDF()" disabled>⬇ 导出处理后的 PDF</button>
+    <div class="prog" id="pdfProg">
+      <div class="prog-bar"><div class="prog-fill" id="pdfFill"></div></div>
+      <div class="prog-msg" id="pdfMsg"></div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="card">
+    <div class="card-title"><span class="badge b-green">4</span> 提取文字 → 导出 Word</div>
+    <div class="hint">使用 <b>Google Gemini AI</b> 识别图片文字，支持中英文，保留段落格式。免费额度每天可用。</div>
+    <span class="lbl" style="margin-top:10px">Google Gemini API Key</span>
+    <input type="text" id="apiKey" placeholder="AIza..." autocomplete="off"
+      oninput="localStorage.setItem('ck',this.value)">
+    <div class="hint" style="margin-top:5px">
+      免费获取：访问 <b>aistudio.google.com</b> → 登录 Google 账号 → 点击「Get API Key」
+    </div>
+    <div class="hint warn" style="margin-top:5px">Key 仅存本地浏览器，不上传任何服务器</div>
+    <span class="lbl" style="margin-top:8px">识别来源</span>
+    <select id="ocrSrc">
+      <option value="crop">裁剪后版本（推荐）</option>
+      <option value="orig">原始页面</option>
+    </select>
+    <button class="btn btn-g" id="btnOCR" onclick="runOCR()" disabled>🔍 开始识别并生成 Word</button>
+    <div class="prog" id="ocrProg">
+      <div class="prog-bar"><div class="prog-fill" id="ocrFill"></div></div>
+      <div class="prog-msg" id="ocrMsg"></div>
+    </div>
+  </div>
+
+</div><!-- /sidebar -->
+
+<div class="main">
+  <div class="main-hd">
+    <h2>页面预览</h2>
+    <span class="pg-info" id="pgInfo">上传 PDF 后显示预览</span>
+  </div>
+  <div id="pgArea">
+    <div class="empty">
+      <div class="ei">📑</div>
+      <p>请先上传 PDF 文件</p>
+      <small>支持扫描件（纯图片型 PDF）和普通 PDF</small>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- OCR Modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h3>📝 OCR 识别结果预览</h3>
+      <button class="modal-x" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-ft">
+      <button class="mbtn mbtn-g" onclick="closeModal()">关闭</button>
+      <button class="mbtn mbtn-b" onclick="dlDocx()">⬇ 下载 Word 文件</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let origCanvases = [];   // rendered at scale 1.5
+let cropCanvases = [];   // after crop
+let logoDataURL = null;
+let ocrPages = [];       // [{num, text}]
+
+// restore API key
+document.getElementById('apiKey').value = localStorage.getItem('ck') || '';
+
+// ── Drag-drop ──────────────────────────────────────────────────────────────
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor='var(--accent)'; });
+dz.addEventListener('dragleave', () => dz.style.borderColor='');
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.style.borderColor='';
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.pdf')) loadPDF(f);
+  else toast('请上传 PDF 文件', 'err');
+});
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast show ' + type;
+  clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 3500);
+}
+function prog(id, pct, msg) {
+  document.getElementById(id+'Prog').style.display = 'block';
+  document.getElementById(id+'Fill').style.width = pct+'%';
+  if (msg !== undefined) document.getElementById(id+'Msg').textContent = msg;
+}
+function hideProg(id) { document.getElementById(id+'Prog').style.display = 'none'; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+// ── Load PDF ───────────────────────────────────────────────────────────────
+async function loadPDF(file) {
+  if (!file) return;
+  document.getElementById('pdfName').textContent = file.name;
+  prog('load', 5, '读取中...');
+  origCanvases = []; cropCanvases = [];
+  document.getElementById('pgArea').innerHTML = '';
+
+  const ab = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+  const n = pdf.numPages;
+  document.getElementById('pgInfo').textContent = '共 ' + n + ' 页';
+
+  const grid = document.createElement('div'); grid.className = 'grid';
+  document.getElementById('pgArea').appendChild(grid);
+
+  for (let i = 1; i <= n; i++) {
+    prog('load', Math.round(10 + i/n*85), '渲染第 '+i+'/'+n+' 页...');
+    const page = await pdf.getPage(i);
+    const vp = page.getViewport({ scale: 1.5 });
+    const cv = document.createElement('canvas');
+    cv.width = vp.width; cv.height = vp.height;
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    origCanvases[i-1] = cv;
+
+    const card = document.createElement('div'); card.className = 'pg-card'; card.dataset.i = i-1;
+    const ovT = document.createElement('div'); ovT.className = 'ov-top';
+    const ovB = document.createElement('div'); ovB.className = 'ov-bot';
+    const lbl = document.createElement('div'); lbl.className = 'pg-label'; lbl.textContent = '第 '+i+' 页';
+    card.appendChild(cv); card.appendChild(ovT); card.appendChild(ovB); card.appendChild(lbl);
+    grid.appendChild(card);
+    await sleep(5);
+  }
+
+  prog('load', 100, '✅ 加载完成，共 '+n+' 页');
+  document.getElementById('btnPDF').disabled = false;
+  document.getElementById('btnOCR').disabled = false;
+  document.getElementById('btnAutoDetect').disabled = false;
+  document.getElementById('sTop').value = 0;
+  document.getElementById('sBot').value = 0;
+  document.getElementById('autoResult').style.display = 'none';
+  updateCrop();
+  toast('PDF 加载成功，'+n+' 页，请点击「AI 自动识别页眉页脚」', 'ok');
+  setTimeout(() => hideProg('load'), 1500);
+}
+
+// ── Crop ───────────────────────────────────────────────────────────────────
+function updateCrop() {
+  const top = parseInt(document.getElementById('sTop').value);
+  const bot = parseInt(document.getElementById('sBot').value);
+  document.getElementById('sTopV').textContent = top+'%';
+  document.getElementById('sBotV').textContent = bot+'%';
+  document.querySelectorAll('.pg-card').forEach(card => {
+    const cv = card.querySelector('canvas');
+    if (!cv) return;
+    const h = cv.clientHeight;
+    card.querySelector('.ov-top').style.height = (h * top / 100) + 'px';
+    card.querySelector('.ov-bot').style.height = (h * bot / 100) + 'px';
+  });
+  buildCrops(top/100, bot/100);
+}
+
+function buildCrops(topF, botF) {
+  cropCanvases = origCanvases.map(src => {
+    if (!src) return null;
+    const W = src.width, H = src.height;
+    const y0 = Math.floor(H * topF), y1 = Math.floor(H * (1 - botF));
+    const dst = document.createElement('canvas');
+    dst.width = W; dst.height = y1 - y0;
+    dst.getContext('2d').drawImage(src, 0, y0, W, y1-y0, 0, 0, W, y1-y0);
+    return dst;
+  });
+}
+
+// ── Logo ───────────────────────────────────────────────────────────────────
+function loadLogo(input) {
+  const f = input.files[0]; if (!f) return;
+  document.getElementById('logoName').textContent = f.name;
+  const r = new FileReader();
+  r.onload = e => {
+    logoDataURL = e.target.result;
+    const p = document.getElementById('logoPrev');
+    p.src = logoDataURL; p.style.display = 'block';
+    toast('Logo 已上传');
+  };
+  r.readAsDataURL(f);
+}
+
+// ── Export PDF ─────────────────────────────────────────────────────────────
+async function exportPDF() {
+  if (!origCanvases.length) return;
+  buildCrops(
+    parseInt(document.getElementById('sTop').value)/100,
+    parseInt(document.getElementById('sBot').value)/100
+  );
+  prog('pdf', 2, '开始合成...');
+  document.getElementById('btnPDF').disabled = true;
+
+  const footTxt   = document.getElementById('footTxt').value.trim();
+  const footSz    = parseInt(document.getElementById('footSz').value)||11;
+  const footColor = document.getElementById('footColor').value;
+  const logoAlign = document.getElementById('logoAlign').value;
+  const logoH     = parseInt(document.getElementById('logoH').value)||60;
+
+  let logoImg = null;
+  if (logoDataURL) {
+    logoImg = await new Promise((res,rej) => {
+      const i = new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=logoDataURL;
+    });
+  }
+
+  const jpegs = [];
+  for (let i = 0; i < cropCanvases.length; i++) {
+    prog('pdf', 5+Math.round(i/cropCanvases.length*85), '合成第 '+(i+1)+'/'+cropCanvases.length+' 页...');
+    const blob = await composePage(cropCanvases[i], logoImg, logoAlign, logoH, footTxt, footSz, footColor);
+    jpegs.push(await blob.arrayBuffer());
+    await sleep(5);
+  }
+
+  prog('pdf', 94, '打包 PDF...');
+  const pdfBlob = await buildPDF(jpegs);
+  saveAs(pdfBlob, 'processed.pdf');
+  prog('pdf', 100, '✅ PDF 导出成功！');
+  document.getElementById('btnPDF').disabled = false;
+  toast('PDF 已下载！');
+  setTimeout(() => hideProg('pdf'), 2000);
+}
+
+async function composePage(cropped, logoImg, align, logoH, footTxt, footSz, footColor) {
+  const W = cropped.width, cH = cropped.height;
+  const LH = logoImg ? logoH : 0;
+  const LP = logoImg ? 8 : 0;
+  const FH = footTxt ? footSz * 2 : 0;
+  const FP = footTxt ? 8 : 0;
+  const dst = document.createElement('canvas');
+  dst.width = W; dst.height = LH + LP + cH + FP + FH;
+  const ctx = dst.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, dst.height);
+  let y = 0;
+  if (logoImg) {
+    const r = LH / logoImg.naturalHeight;
+    const lw = Math.round(logoImg.naturalWidth * r);
+    let lx = align==='center' ? (W-lw)/2 : align==='right' ? W-lw-16 : 16;
+    ctx.drawImage(logoImg, lx, y, lw, LH);
+    y += LH + LP;
+  }
+  ctx.drawImage(cropped, 0, y); y += cH + FP;
+  if (footTxt) {
+    ctx.font = footSz+'px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = footColor; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(footTxt, W/2, y);
+  }
+  return new Promise(res => dst.toBlob(res, 'image/jpeg', 0.90));
+}
+
+async function buildPDF(jpegs) {
+  // Get dimensions for each image
+  const dims = await Promise.all(jpegs.map(ab => new Promise(res => {
+    const url = URL.createObjectURL(new Blob([ab],{type:'image/jpeg'}));
+    const img = new Image();
+    img.onload = () => { res({w:img.naturalWidth, h:img.naturalHeight}); URL.revokeObjectURL(url); };
+    img.src = url;
+  })));
+
+  const enc = new TextEncoder();
+  const parts = []; let off = 0;
+  const offs = {};
+  const n = jpegs.length;
+  // obj ids: 1=catalog, 2=pages, 3..3+n-1=pages, 3+n..3+2n-1=img xobjects
+  const TOTAL = 3 + 2*n;
+
+  function pu(s) { const u=enc.encode(s); parts.push(u); off+=u.byteLength; }
+  function pb(ab) { const u=new Uint8Array(ab); parts.push(u); off+=u.byteLength; }
+
+  pu('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
+  offs[1]=off; pu('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  offs[2]=off;
+  const kids = Array.from({length:n},(_,i)=>`${3+i} 0 R`).join(' ');
+  pu('2 0 obj\n<< /Type /Pages /Kids ['+kids+'] /Count '+n+' >>\nendobj\n');
+
+  for (let i=0; i<n; i++) {
+    const {w,h} = dims[i];
+    const pw = (w*0.75).toFixed(2), ph = (h*0.75).toFixed(2);
+    const cstream = 'q '+pw+' 0 0 '+ph+' 0 0 cm /Im'+i+' Do Q';
+    offs[3+i]=off;
+    pu((3+i)+' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pw+' '+ph+']'
+      +' /Resources << /XObject << /Im'+i+' '+(3+n+i)+' 0 R >> >>'
+      +' /Contents << /Length '+cstream.length+' >> >>\nendobj\n');
+    pu('stream\n'+cstream+'\nendstream\n');
+
+    offs[3+n+i]=off;
+    pu((3+n+i)+' 0 obj\n<< /Type /XObject /Subtype /Image /Width '+w+' /Height '+h
+      +' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jpegs[i].byteLength+' >>\nstream\n');
+    pb(jpegs[i]);
+    pu('\nendstream\nendobj\n');
+  }
+
+  const xref=off;
+  pu('xref\n0 '+TOTAL+'\n');
+  pu('0000000000 65535 f \n');
+  for (let o=1;o<TOTAL;o++) pu(String(offs[o]||0).padStart(10,'0')+' 00000 n \n');
+  pu('trailer\n<< /Size '+TOTAL+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n');
+
+  const total = parts.reduce((s,p)=>s+p.byteLength,0);
+  const out = new Uint8Array(total); let pos=0;
+  for (const p of parts) { out.set(p,pos); pos+=p.byteLength; }
+  return new Blob([out],{type:'application/pdf'});
+}
+
+// ── AI 自动识别页眉页脚 ────────────────────────────────────────────────────
+async function autoDetectCrop() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { toast('请先填写 API Key', 'err'); return; }
+  if (!origCanvases.length) { toast('请先上传 PDF', 'err'); return; }
+
+  document.getElementById('btnAutoDetect').disabled = true;
+  prog('detect', 10, '正在分析页面结构...');
+
+  // Use first page (and second if available) to detect header/footer
+  const sampleCanvases = origCanvases.slice(0, Math.min(2, origCanvases.length));
+  const b64List = sampleCanvases.map(cv => cv.toDataURL('image/jpeg', 0.80).split(',')[1]);
+
+  const prompt = `你是一个PDF页面分析专家。请分析这张PDF页面图片，识别页眉（header）和页脚（footer）区域。
+
+页眉通常包含：文档标题、公司名、Logo、章节名、横线分隔等，位于页面顶部。
+页脚通常包含：页码、版权声明、日期、文档编号、横线分隔等，位于页面底部。
+
+请以百分比表示页眉和页脚各自占整个页面高度的比例（从0到30之间的整数）。
+
+注意：
+- 如果没有明显的页眉，返回0
+- 如果没有明显的页脚，返回0
+- 只计算页眉页脚区域，不要包含正文内容
+- 页眉页脚之间通常有横线或明显空白分隔
+
+请严格按照以下JSON格式返回，不要有任何其他文字：
+{"header_pct": 数字, "footer_pct": 数字, "reason": "简短说明"}`;
+
+  try {
+    prog('detect', 40, 'Gemini 正在分析...');
+    let r;
+    try {
+      r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inline_data: { mime_type: 'image/jpeg', data: b64List[0] } },
+                ...(b64List[1] ? [{ inline_data: { mime_type: 'image/jpeg', data: b64List[1] } }] : []),
+                { text: prompt }
+              ]
+            }],
+            generationConfig: { temperature: 0, maxOutputTokens: 256 }
+          })
+        }
+      );
+    } catch(networkErr) {
+      console.error('[detect fetch error]', networkErr);
+      throw new Error(`网络请求失败：${networkErr.message}。请确认网络可访问 Google，且不是从本地文件直接打开`);
+    }
+
+    if (!r.ok) {
+      let errMsg = `HTTP ${r.status}`;
+      try { const e = await r.json(); errMsg = e?.error?.message || errMsg; console.error('[detect API error]', e); } catch(_){}
+      throw new Error(errMsg);
+    }
+    const d = await r.json();
+    console.log('[detect response]', d);
+    const raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Parse JSON from response
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('返回格式异常: ' + raw.slice(0, 100));
+    const result = JSON.parse(match[0]);
+
+    const hPct = Math.max(0, Math.min(30, Math.round(result.header_pct || 0)));
+    const fPct = Math.max(0, Math.min(30, Math.round(result.footer_pct || 0)));
+    const reason = result.reason || '';
+
+    // Apply to sliders
+    document.getElementById('sTop').value = hPct;
+    document.getElementById('sBot').value = fPct;
+    updateCrop();
+
+    // Show result
+    const resultBox = document.getElementById('autoResult');
+    const resultTxt = document.getElementById('autoResultTxt');
+    resultBox.style.display = 'block';
+    resultTxt.innerHTML = `✅ 识别完成：页眉 <b>${hPct}%</b>，页脚 <b>${fPct}%</b><br><span style="color:#6b7280;font-size:10px">${esc(reason)}</span>`;
+
+    prog('detect', 100, '识别完成，可用滑块微调');
+    toast(`页眉 ${hPct}%，页脚 ${fPct}%，已应用到预览`);
+    setTimeout(() => hideProg('detect'), 2000);
+  } catch(e) {
+    prog('detect', 0, '❌ 识别失败：' + e.message);
+    toast('识别失败：' + e.message, 'err');
+  }
+  document.getElementById('btnAutoDetect').disabled = false;
+}
+
+
+async function runOCR() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { toast('请填写 API Key', 'err'); return; }
+  if (!origCanvases.length) { toast('请先上传 PDF', 'err'); return; }
+
+  buildCrops(
+    parseInt(document.getElementById('sTop').value)/100,
+    parseInt(document.getElementById('sBot').value)/100
+  );
+
+  const useCrop = document.getElementById('ocrSrc').value === 'crop';
+  const canvases = useCrop ? cropCanvases : origCanvases;
+
+  ocrPages = [];
+  document.getElementById('btnOCR').disabled = true;
+  prog('ocr', 2, '准备中...');
+
+  for (let i=0; i<canvases.length; i++) {
+    prog('ocr', Math.round(5 + i/canvases.length*90), '识别第 '+(i+1)+'/'+canvases.length+' 页...');
+    const b64 = canvases[i].toDataURL('image/jpeg', 0.85).split(',')[1];
+    try {
+      const text = await claudeOCR(b64, key);
+      ocrPages.push({ num: i+1, text });
+    } catch(e) {
+      ocrPages.push({ num: i+1, text: '[第 '+(i+1)+' 页识别失败: '+e.message+']' });
+    }
+    await sleep(600);
+  }
+
+  prog('ocr', 100, '✅ 识别完成！共 '+canvases.length+' 页');
+  document.getElementById('btnOCR').disabled = false;
+
+  document.getElementById('modalBody').innerHTML = ocrPages.map(p =>
+    '<div class="pg-block"><div class="pg-block-lbl">第 '+p.num+' 页</div>'
+    +'<div class="pg-text">'+esc(p.text)+'</div></div>'
+  ).join('');
+  document.getElementById('modal').classList.add('open');
+  toast('识别完成，可预览并下载 Word');
+  setTimeout(() => hideProg('ocr'), 2000);
+}
+
+async function claudeOCR(b64, key) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+  let r;
+  try {
+    r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: b64 } },
+            { text: `你是专业的中文OCR文字识别工具。请将图片中的所有文字完整、准确地提取出来。
+
+要求：
+1. 原封不动地提取所有中文、英文、数字、标点符号
+2. 保留原有的段落结构：段落之间用空行分隔
+3. 保留标题层级：如果能识别出标题（加粗、字号更大、独占一行），在标题前加【标题】标记
+4. 保留列表编号和缩进关系（如"一、二、三"或"1. 2. 3."或"（一）（二）"）
+5. 表格内容按行输出，列之间用"|"分隔
+6. 不要添加任何解释、注释或额外内容
+7. 保留原文的全角/半角标点
+
+直接输出识别的文字内容：` }
+          ]
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 4096 }
+      })
+    });
+  } catch(networkErr) {
+    // Network/CORS error — likely file:// protocol or no internet
+    console.error('[OCR fetch error]', networkErr);
+    throw new Error(`网络请求失败：${networkErr.message}。请确认：①用浏览器打开而非本地文件双击；②网络可访问 Google`);
+  }
+  if (!r.ok) {
+    let errMsg = `HTTP ${r.status}`;
+    try { const e = await r.json(); errMsg = e?.error?.message || errMsg; console.error('[OCR API error]', e); } catch(_){}
+    throw new Error(errMsg);
+  }
+  const d = await r.json();
+  console.log('[OCR response]', d);
+  const text = d.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    const reason = d.candidates?.[0]?.finishReason || '未知';
+    throw new Error(`Gemini 未返回文字内容，finish_reason: ${reason}`);
+  }
+  return text;
+}
+
+// ── Download Word ──────────────────────────────────────────────────────────
+async function dlDocx() {
+  if (!ocrPages.length) return;
+  const { Document, Packer, Paragraph, TextRun, PageBreak, AlignmentType, HeadingLevel } = docx;
+  const children = [];
+
+  ocrPages.forEach((pg, idx) => {
+    // Page label
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: '—— 第 ' + pg.num + ' 页 ——', size: 18, color: '999999', italics: true })],
+      spacing: { after: 160 },
+    }));
+
+    const lines = pg.text.split('\n');
+    let buf = [];
+
+    const flush = (isHeading) => {
+      const t = buf.join('').trim();
+      if (!t) { buf = []; return; }
+      if (isHeading) {
+        // Heading style: bold, slightly larger
+        children.push(new Paragraph({
+          children: [new TextRun({ text: t, size: 26, bold: true, font: 'Microsoft YaHei' })],
+          spacing: { before: 200, after: 120 },
+        }));
+      } else {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: t, size: 24, font: 'Microsoft YaHei' })],
+          spacing: { after: 100 },
+        }));
+      }
+      buf = [];
+    };
+
+    for (const line of lines) {
+      const stripped = line.trim();
+      if (!stripped) {
+        flush(false);
+        continue;
+      }
+      // Detect heading marker
+      if (stripped.startsWith('【标题】')) {
+        flush(false);
+        buf.push(stripped.replace('【标题】', ''));
+        flush(true);
+        continue;
+      }
+      // Detect table row (contains | separator)
+      if (stripped.includes('|')) {
+        flush(false);
+        children.push(new Paragraph({
+          children: [new TextRun({ text: stripped, size: 22, font: 'Courier New', color: '374151' })],
+          spacing: { after: 80 },
+        }));
+        continue;
+      }
+      buf.push(stripped);
+    }
+    flush(false);
+
+    if (idx < ocrPages.length - 1)
+      children.push(new Paragraph({ children: [new PageBreak()] }));
+  });
+
+  const doc = new Document({
+    styles: {
+      default: {
+        document: { run: { font: 'Microsoft YaHei', size: 24 } }
+      }
+    },
+    sections: [{ children }]
+  });
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, '提取文字.docx');
+  toast('Word 文件下载成功！');
+}
+</script>
+</body>
+</html>
